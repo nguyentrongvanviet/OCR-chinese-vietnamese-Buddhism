@@ -60,6 +60,8 @@ def build(repo_url):
     OUTPUT_NAME = "ocr_zh_v01" #@param {type:"string"}
     PAGES = "3,4,5" #@param {type:"string"}
     DAGSHUB_REPO = "nguyentrongvanviet/OCR_chinese_to_vietnamese_for_NLP" #@param {type:"string"}
+    UPLOAD_TO_DAGSHUB = True #@param {type:"boolean"}
+    AUTH_METHOD = "oauth" #@param ["oauth", "colab_secrets"]
     source = json.loads((REPO_DIR / "assets/source_manifest.json").read_text())
     PDF_PATH = REPO_DIR / source["path"]
     assert PDF_PATH.stat().st_size == source["bytes"]
@@ -77,23 +79,36 @@ def build(repo_url):
 
     Ô sau hiển thị liên kết đăng nhập OAuth nếu chưa xác thực. Mở liên kết và tự xác nhận.
     Không đưa token vào code, Git, Drive hoặc output notebook. SDK giữ thông tin xác thực trong runtime tạm thời.
+    Nếu dùng lâu dài, chọn `AUTH_METHOD="colab_secrets"`, tự thêm secret `DAGSHUB_USER_TOKEN`
+    trong mục Secrets (biểu tượng chìa khóa) và bật Notebook access. Mỗi người dùng token của mình.
+    Đặt `UPLOAD_TO_DAGSHUB=False` nếu chỉ cần OCR và ZIP trên Drive.
     """)
     add("code", """
-    auth_code = (
-        "import dagshub.auth; from dagshub import get_repo_bucket_client; "
-        "dagshub.auth.get_token(); "
-        f"client=get_repo_bucket_client({DAGSHUB_REPO!r}); "
-        f"client.list_objects_v2(Bucket={DAGSHUB_REPO.split('/')[-1]!r}, MaxKeys=1); "
-        "print('DagsHub: xác thực và truy cập bucket thành công.')"
-    )
-    run_visible([ENV_PY, "-u", "-c", auth_code])
+    import os
+    if UPLOAD_TO_DAGSHUB:
+        os.environ["DAGSHUB_CLIENT_TOKENS_CACHE"] = "/content/han-ocr-auth/tokens.yaml"
+        if AUTH_METHOD == "colab_secrets":
+            from google.colab import userdata
+            try:
+                os.environ["DAGSHUB_USER_TOKEN"] = userdata.get("DAGSHUB_USER_TOKEN")
+            except (userdata.SecretNotFoundError, userdata.NotebookAccessError, userdata.TimeoutException):
+                raise RuntimeError("Thêm DAGSHUB_USER_TOKEN vào Colab Secrets và bật Notebook access, rồi chạy lại ô này.") from None
+            if not os.environ["DAGSHUB_USER_TOKEN"].strip():
+                raise RuntimeError("Secret DAGSHUB_USER_TOKEN đang rỗng.")
+        elif AUTH_METHOD == "oauth":
+            os.environ.pop("DAGSHUB_USER_TOKEN", None)
+        else:
+            raise ValueError("AUTH_METHOD phải là oauth hoặc colab_secrets.")
+        run_visible([ENV_PY, "-u", str(REPO_DIR / "check_dagshub.py"), "--repo", DAGSHUB_REPO])
+    else:
+        print("Chỉ lưu checkpoint và ZIP trên Drive; không cần xác thực DagsHub.")
     """)
     add("code", """
-    run_visible([
-        ENV_PY, "-u", str(REPO_DIR / "run_ocr.py"),
-        "--pdf", str(PDF_PATH), "--output", str(OUTPUT_DIR), "--pages", PAGES,
-        "--dagshub-repo", DAGSHUB_REPO,
-    ])
+    command = [ENV_PY, "-u", str(REPO_DIR / "run_ocr.py"),
+               "--pdf", str(PDF_PATH), "--output", str(OUTPUT_DIR), "--pages", PAGES]
+    if UPLOAD_TO_DAGSHUB:
+        command.extend(["--dagshub-repo", DAGSHUB_REPO])
+    run_visible(command)
     """)
     add("code", """
     from IPython.display import display
@@ -124,9 +139,12 @@ def build(repo_url):
     `han.txt` chứa toàn bộ trang thuộc phạm vi chạy; `pages.jsonl` giữ số trang và JSON OCR gốc.
     """)
     add("code", """
-    latest = json.loads((OUTPUT_DIR / "latest_export.json").read_text())
-    run_visible([ENV_PY, "-u", str(REPO_DIR / "export_results.py"),
-                 "--bundle", latest["path"], "--dagshub-repo", DAGSHUB_REPO])
+    if UPLOAD_TO_DAGSHUB:
+        latest = json.loads((OUTPUT_DIR / "latest_export.json").read_text())
+        run_visible([ENV_PY, "-u", str(REPO_DIR / "export_results.py"),
+                     "--bundle", latest["path"], "--dagshub-repo", DAGSHUB_REPO])
+    else:
+        print("Upload đang tắt. ZIP đã được lưu trên Drive.")
     """)
     add("markdown", """
     **Chạy toàn bộ**

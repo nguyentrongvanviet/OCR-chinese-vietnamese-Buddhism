@@ -11,7 +11,9 @@ Colab chạy GPU; Drive giữ checkpoint qua những lần ngắt runtime; DagsH
 1. Mở Colab, chọn **Runtime → Change runtime type → GPU**.
 2. Chạy từ trên xuống. Ô clone lấy code + PDF. Drive được mount để lưu checkpoint.
 3. Cài môi trường Python 3.12 riêng, Paddle GPU 3.2.1/CUDA 12.6, PaddleOCR 3.7.0 với PaddleOCR-VL v1.6. Log hiển thị trực tiếp. Lần đầu tải các thư viện/model có thể lâu. SentencePiece được ghim 0.2.1 để tránh lỗi Protobuf của bản mới; setup kiểm tra import tokenizer trước OCR.
-4. Ô xác thực DagsHub hiển thị liên kết OAuth; mở và tự xác nhận nếu cần. Không paste token vào notebook hoặc commit credential. SDK lưu credential trong runtime tạm thời.
+4. Mặc định `AUTH_METHOD="oauth"`: ô xác thực hiển thị liên kết OAuth; mở và tự xác nhận nếu cần. Nếu OAuth lỗi/hết hạn, chạy lại ô xác thực và dùng liên kết mới. Để chạy thường xuyên, chọn `AUTH_METHOD="colab_secrets"`, tự thêm secret `DAGSHUB_USER_TOKEN` trong thanh bên Secrets và bật Notebook access. Mỗi thành viên dùng token riêng đã được cấp quyền ghi repo. Token chỉ truyền qua môi trường runtime, không nằm trong code hoặc ZIP. SDK cache OAuth cũng nằm trong `/content`, không nằm trên Drive.
+
+   Nếu chưa cần upload, đặt `UPLOAD_TO_DAGSHUB=False`: vẫn chạy OCR, ghép TXT và tạo ZIP trên Drive; bỏ qua OAuth. Bật lại upload và chạy ô xác thực rồi ô Upload lại khi đã sẵn sàng.
 5. Mặc định `PAGES="3,4,5"`. Ô OCR tạo checkpoint rồi tự đóng gói và upload lên DagsHub. Đối chiếu ảnh với chữ trước khi chạy nhiều trang.
 6. Đổi `PAGES="all"`, chạy lại ô cấu hình và ô OCR để xử lý toàn bộ. Trang có checkpoint hợp lệ được bỏ qua.
 
@@ -82,10 +84,12 @@ Cài `requirements-export.txt` để dùng DagsHub. `--include-images` của exp
 
 ```bash
 python -m pip install -r requirements-test.txt
-python -m unittest -v test_workflow test_exports
+python -m unittest -v test_workflow test_exports test_launcher
 python build_notebook.py
 ```
 
-Các test kiểm tra phục hồi sau ngắt, phát hiện checkpoint hỏng, không trộn cấu hình, giữ dấu trang thiếu/rỗng, xuất UTF-8 và upload có checksum/thử lại. Chúng không đo chất lượng nhận dạng chữ Hán.
+Các test kiểm tra phục hồi sau ngắt, phát hiện checkpoint hỏng, không trộn cấu hình, giữ dấu trang thiếu/rỗng, xuất UTF-8, CLI tạo ZIP khi không upload, notebook khớp generator và upload có checksum/thử lại. Chúng không đo chất lượng nhận dạng chữ Hán.
 
 MIT trong repo áp dụng cho code. PDF giữ thông tin nguồn gốc riêng trong manifest; repo không tuyên bố cấp lại giấy phép cho nội dung sách.
+
+Xác thực dùng cơ chế chính thức của [DagsHub SDK](https://dagshub.com/docs/client/reference/auth); bucket dùng [DagsHub Storage](https://dagshub.com/docs/feature_guide/dagshub_storage/).

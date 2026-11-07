@@ -61,9 +61,10 @@ def main():
                                              pages=args.pages, pipeline_version=args.pipeline_version,
                                              dpi=args.dpi)
             result = zh_ocr_worker.run(worker_args)
+            from export_results import make_export, upload_export
+            bundle = make_export(output, args.pages)
+            print("ZIP kết quả:", bundle / "bundle.zip", flush=True)
             if args.dagshub_repo:
-                from export_results import make_export, upload_export
-                bundle = make_export(output, args.pages)
                 upload_export(bundle, args.dagshub_repo)
             return result
     except (OSError, ValueError) as error:
