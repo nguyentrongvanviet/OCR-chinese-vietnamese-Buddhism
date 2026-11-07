@@ -1,128 +1,91 @@
-# Hán OCR trên Google Colab
+# OCR chữ Hán trên Colab, chia sẻ kết quả qua DagsHub
 
-Repo quản lý code. Colab cung cấp GPU. Google Drive giữ PDF, kết quả và checkpoint.
-Chỉ nhận dạng bản tiếng Trung; chưa dịch, dóng hàng hoặc tạo XLSX.
+[Chạy notebook trên Colab](https://colab.research.google.com/github/nguyentrongvanviet/OCR-chinese-vietnamese-Buddhism/blob/main/OCR_Han_Colab.ipynb)
 
-[![Open in Colab](https://colab.research.google.com/assets/colab-badge.svg)](https://colab.research.google.com/github/nguyentrongvanviet/OCR-chinese-vietnamese-Buddhism/blob/main/OCR_Han_Colab.ipynb)
+GitHub chứa code và **một bản PDF nguồn cố định** (`assets/pdf/an_quang_van_sao_zh_4.pdf`, 214 trang, 51.832.050 byte). Khi Colab clone repo, PDF có sẵn; không cần upload thủ công. `assets/source_manifest.json` ghi SHA-256 và notebook kiểm tra trước khi chạy. Tránh sửa/commit lại PDF nhiều lần vì làm lịch sử Git phình to. Với nhiều sách hoặc bản scan lớn hơn, chuyển nguồn sang kho dữ liệu và tải theo manifest.
+
+Colab chạy GPU; Drive giữ checkpoint qua những lần ngắt runtime; DagsHub Storage nhận các gói kết quả có mã riêng để cả nhóm dùng chung. Repo DagsHub đang cấu hình là **công khai**: https://dagshub.com/nguyentrongvanviet/OCR_chinese_to_vietnamese_for_NLP . Chỉ gói dữ liệu OCR được gửi lên; không gửi token hay PDF nguồn trong bước export.
 
 ## Chạy
 
-1. Đưa PDF tiếng Trung vào `My Drive/NLP_midterm_zh/source/`.
-2. Bấm **Open in Colab**, chọn **Runtime > Change runtime type > GPU**.
-3. Chạy ô clone, mount Drive, cài môi trường và chạy OCR.
-4. Mặc định thử trang PDF `3,4,5`. Xem ảnh và text trước khi đổi `PAGES` thành `all`.
-5. Khi runtime mới, chạy lại từ đầu với cùng đường dẫn đầu ra; trang có checkpoint hợp lệ được bỏ qua.
+1. Mở Colab, chọn **Runtime → Change runtime type → GPU**.
+2. Chạy từ trên xuống. Ô clone lấy code + PDF. Drive được mount để lưu checkpoint.
+3. Cài môi trường Python 3.12 riêng, Paddle GPU 3.2.1/CUDA 12.6, PaddleOCR 3.7.0 với PaddleOCR-VL v1.6. Log hiển thị trực tiếp. Lần đầu tải các thư viện/model có thể lâu. SentencePiece được ghim 0.2.1 để tránh lỗi Protobuf của bản mới; setup kiểm tra import tokenizer trước OCR.
+4. Ô xác thực DagsHub hiển thị liên kết OAuth; mở và tự xác nhận nếu cần. Không paste token vào notebook hoặc commit credential. SDK lưu credential trong runtime tạm thời.
+5. Mặc định `PAGES="3,4,5"`. Ô OCR tạo checkpoint rồi tự đóng gói và upload lên DagsHub. Đối chiếu ảnh với chữ trước khi chạy nhiều trang.
+6. Đổi `PAGES="all"`, chạy lại ô cấu hình và ô OCR để xử lý toàn bộ. Trang có checkpoint hợp lệ được bỏ qua.
 
-Notebook chỉ là launcher, không nhúng code OCR. Khi cập nhật file `.py` trên GitHub,
-chạy lại ô clone/fetch để lấy phiên bản mới. Notebook đang mở không tự đồng bộ các ô `.ipynb`
-từ GitHub; giữ các ô launcher ổn định và cập nhật logic trong script.
+`REF="main"` lấy phiên bản hiện tại tại lúc chạy ô clone. Điền commit cụ thể để tái lập. Không cập nhật code giữa lượt OCR. Nếu nguồn, worker hay phiên bản model đổi, dùng `OUTPUT_NAME` mới theo thông báo. Không cho nhiều người ghi đồng thời cùng thư mục Drive; mỗi lượt chạy/nhánh thử nghiệm dùng tên riêng.
 
-Có thể gọi trực tiếp từ một notebook trống:
+## Nhận sản phẩm
 
-```python
-from google.colab import drive
-drive.mount('/content/drive')
+Mỗi lượt chạy tạo thư mục trên Drive:
+
 ```
+NLP_midterm_zh/ocr_zh_v01/
+  config.json                 # SHA nguồn, worker và cấu hình
+  environment-lock.txt        # phiên bản thực tế đã cài
+  runs/                       # lịch sử các lần chạy và commit
+  pages/page_0003/
+    source.png                # ảnh gốc đầy đủ, hoặc render nếu cần
+    raw.json                  # JSON nguyên bản từ OCR
+    text.txt                  # UTF-8 cho riêng trang
+    status.json               # checksum, thời gian, trạng thái
+  han_ocr_partial.txt         # đủ dấu trang PDF, trang chưa chạy được ghi rõ
+  han_ocr_full.txt            # chỉ xuất hiện khi xử lý đủ 214 trang
+  summary.json
+  exports/<export_id>/
+    han.txt                   # ghép các trang trong phạm vi lượt xuất
+    pages.jsonl               # số trang + text + JSON OCR gốc
+    manifest.json             # trang đủ/thiếu/rỗng, nguồn và cấu hình
+    pages/                    # raw.json, text.txt, status.json từng trang
+    environment-lock.txt
+    NOTE.txt
+    checksums.sha256
+    bundle.zip                # tải một file cho cả nhóm
+    upload_receipt.json       # đường dẫn DagsHub khi truyền thành công
+  latest_export.json
+```
+
+DagsHub Storage lưu tại `exports/<12 ký tự SHA PDF>/<export_id>/`, kèm `_SUCCESS.json` **sau khi** upload và tải đọc lại để xác minh SHA-256 mọi file. Mỗi mã lần xuất là một snapshot riêng, không ghi đè sản phẩm của người khác. `complete_scope=true` nghĩa là đủ phạm vi đã chọn; `complete_book=true` mới nghĩa là đủ cả sách. `_SUCCESS` chỉ xác nhận truyền file, không xác nhận OCR đúng.
+
+Cả nhóm chọn cùng một `export_id`, tải `bundle.zip` trong tab **Data / DagsHub Storage** của repo, giải nén và đọc `han.txt` hoặc `pages.jsonl`. Dùng manifest để biết gói gồm trang nào. Bucket là kho S3 tương thích; snapshot được tổ chức bởi code này, chưa phải lịch sử DVC hoặc bản dữ liệu đã duyệt.
+
+## Khi Colab/mạng ngắt
+
+- OCR bị ngắt: chạy lại cùng cấu hình. Checkpoint bị thiếu hoặc sai checksum được chạy lại; trang hoàn thành được bỏ qua. Không cần OCR lại toàn bộ.
+- Upload thất bại: checkpoint và ZIP vẫn nằm trên Drive. Chạy ô **Upload lại**; nó dùng gói lần xuất gần nhất, bỏ qua file đã truyền đúng và không chạy OCR.
+- Runtime mới: chạy lại các ô đầu để clone, mount, cài thư viện, xác thực rồi tiếp tục.
+- Không upload được vẫn lấy ZIP trực tiếp trên Drive. Để chỉ đóng gói mà không cần DagsHub, chạy lệnh bên dưới.
 
 ```bash
-!git clone https://github.com/nguyentrongvanviet/OCR-chinese-vietnamese-Buddhism.git /content/han-ocr-colab
-!python /content/han-ocr-colab/setup_colab.py
-!/content/han-ocr-env/bin/python -u /content/han-ocr-colab/run_ocr.py --drive-dir /content/drive/MyDrive/NLP_midterm_zh --pages 3,4,5
+python export_results.py --output /path/to/ocr_zh_v01 --pages all
+python export_results.py --bundle /path/to/ocr_zh_v01/exports/EXPORT_ID \
+  --dagshub-repo nguyentrongvanviet/OCR_chinese_to_vietnamese_for_NLP
 ```
 
-Đổi `--pages 3,4,5` thành `--pages all` để chạy toàn bộ, hoặc `--pages 6-30` để chia khoảng.
-Clone một lần trong mỗi runtime. Nếu đã clone, dùng ô launcher để fetch thay vì clone chồng lên thư mục cũ.
-
-Đường dẫn tường minh, dùng được cả khi không tìm file từ Drive:
+CLI OCR cũng hỗ trợ Kaggle hoặc máy GPU:
 
 ```bash
-/content/han-ocr-env/bin/python run_ocr.py \
-  --pdf "/content/drive/MyDrive/NLP_midterm_zh/source/book-Zh.pdf" \
-  --output "/content/drive/MyDrive/NLP_midterm_zh/ocr_zh_v01" \
-  --pages 3,4,5
+python run_ocr.py --pdf assets/pdf/an_quang_van_sao_zh_4.pdf \
+  --output /path/to/results --pages 3,4,5 \
+  --dagshub-repo nguyentrongvanviet/OCR_chinese_to_vietnamese_for_NLP
 ```
 
-## File trong repo
+Cài `requirements-export.txt` để dùng DagsHub. `--include-images` của exporter bổ sung ảnh trang vào gói khi cần đối chiếu; mặc định chỉ xuất chữ và JSON để truyền nhẹ hơn.
 
-| File | Vai trò |
-|---|---|
-| `OCR_Han_Colab.ipynb` | Clone/fetch, mount Drive, cấu hình và gọi script. |
-| `setup_colab.py` | Kiểm tra GPU, tạo Python 3.12 riêng và cài thư viện. |
-| `run_ocr.py` | Tìm/copy PDF sang ổ runtime và khởi chạy worker. |
-| `zh_ocr_worker.py` | OCR theo trang, lưu dữ liệu thô, kiểm tra checkpoint và ghép TXT. |
-| `requirements-colab.txt` | Cố định các thư viện chính. |
-| `test_workflow.py` | Kiểm tra lưu, tiếp tục, lỗi trang và checksum trên CPU. |
-| `build_notebook.py` | Tạo lại launcher nếu cần, không nhúng worker. |
+## Giới hạn OCR
 
-Môi trường: Python 3.12, PaddleOCR 3.7.0, PaddlePaddle GPU 3.2.1 CUDA 12.6,
-pipeline PaddleOCR-VL v1.6. Suy luận trực tiếp trên GPU, không dựng vLLM server.
-Colab L4/A100 phù hợp để thử nếu được cấp; T4 có thể thử bằng đường suy luận trực tiếp.
-`setup_colab.py` kiểm tra tính toán GPU trước khi tải mô hình. Mô hình được tải ở lần OCR đầu.
+Đây là **OCR thô**, chưa khử chữ xuyên mặt sau theo cặp, chưa hiệu đính, chưa chuyển phồn thể sang giản thể, chưa dịch và chưa gióng hàng với tiếng Việt. Ảnh gốc giữ lại để đối chiếu. Văn bản giữ các block theo thứ tự mô hình, không tự sửa chữ. Chữ lem, triện và cột dọc có thể bị đọc nhầm, đọc thêm hoặc đảo thứ tự. Trang không rỗng vẫn có thể sai. `quality_reviewed=false` được giữ trong manifest để không nhầm với dữ liệu đã duyệt.
 
-## Đầu ra
-
-Trong `My Drive/NLP_midterm_zh/ocr_zh_v01/`:
-
-```text
-config.json
-environment-lock.txt
-summary.json
-NOTE.txt
-han_ocr_partial.txt
-han_ocr_full.txt                 # chỉ có khi mọi trang đã xử lý
-runs/                           # commit, cấu hình lượt chạy và trạng thái
-pages/
-  page_0003/
-    source.png
-    raw.json
-    text.txt
-    status.json
-```
-
-- `raw.json`: giữ vùng chữ, nhãn và thứ tự đọc do pipeline dự đoán.
-- `text.txt`: nối nội dung block theo thứ tự pipeline, không tự đổi giản thể/phồn thể.
-- `partial`: có mã trang cho cả tài liệu, đánh dấu rõ trang chưa có kết quả.
-- `full`: mọi trang đã xử lý, vẫn là OCR thô; không đồng nghĩa mọi chữ đã đúng.
-- Trang OCR rỗng được giữ và ghi vào NOTE để xem ảnh gốc, không mặc định là trang trắng.
-
-Checkpoint gồm checksum PDF, worker, các phiên bản chính và file đầu ra. Trang lỗi hoặc
-file bị hỏng sẽ được xử lý lại. Khi đổi worker/mô hình/thư viện, dùng `--output-name ocr_zh_v02`
-hoặc `--output` mới để tránh trộn dữ liệu khác cấu hình. Không cho hai phiên ghi cùng thư mục.
-
-Mỗi lượt ghi commit vào `runs/`. `REF=main` trong launcher lấy code mới tại thời điểm fetch;
-điền một tag hoặc commit cụ thể để tái lập. Không cập nhật repo giữa một lượt OCR.
-
-## Điều GitHub giải quyết và không giải quyết
-
-Code ở một chỗ, có lịch sử thay đổi, dễ sửa trên máy rồi push, giảm thao tác sao chép các ô notebook.
-Notebook không còn là bản sao thứ hai của implementation.
-
-Git clone không giữ môi trường, GPU hay tiến trình của Colab. Runtime mới vẫn có thể phải cài lại
-thư viện và tải model. Dữ liệu trong `/content` có thể mất khi runtime bị xóa; checkpoint phải ở Drive.
-Drive có độ trễ I/O nên PDF được copy sang ổ runtime trước khi đọc.
-
-Không commit PDF, dữ liệu OCR, model weights, môi trường Python hoặc thông tin đăng nhập.
-`.gitignore` bảo vệ các loại này khỏi thao tác add thông thường. Repo công khai chỉ chứa code và hướng dẫn.
-
-## Giới hạn nhận dạng
-
-Chưa chạy mô hình thật trên Colab GPU trong lần chuẩn bị repo. Các kiểm tra cục bộ dùng OCR giả lập
-để kiểm tra checkpoint, không đo CER hay xác nhận khả năng nhận dạng chữ dọc.
-
-Chưa tích hợp khử lem theo cặp. Trước hết thử ảnh gốc; nếu OCR lấy nhầm chữ xuyên mặt sau,
-bỏ vùng chữ hoặc đảo cột, giữ kết quả pilot và bổ sung xử lý ảnh trên các cặp đã xác minh.
-Không coi việc notebook chạy hết là bằng chứng text đúng. Không tự sửa chữ dị thể theo phỏng đoán.
-
-## Kiểm tra trên CPU
+## Kiểm tra code không cần GPU
 
 ```bash
 python -m pip install -r requirements-test.txt
-python -m unittest -v test_workflow
+python -m unittest -v test_workflow test_exports
+python build_notebook.py
 ```
 
-Các bài kiểm tra không tải mô hình OCR. Kiểm tra thực trên GPU cần chạy pilot và đối chiếu ảnh.
+Các test kiểm tra phục hồi sau ngắt, phát hiện checkpoint hỏng, không trộn cấu hình, giữ dấu trang thiếu/rỗng, xuất UTF-8 và upload có checksum/thử lại. Chúng không đo chất lượng nhận dạng chữ Hán.
 
-## Nguồn
-
-- [PaddleOCR-VL: cài đặt, GPU, Python API](https://www.paddleocr.ai/main/en/version3.x/pipeline_usage/PaddleOCR-VL.html)
-- [Colab FAQ: runtime, Drive và giới hạn tài nguyên](https://research.google.com/colaboratory/faq.html)
+MIT trong repo áp dụng cho code. PDF giữ thông tin nguồn gốc riêng trong manifest; repo không tuyên bố cấp lại giấy phép cho nội dung sách.

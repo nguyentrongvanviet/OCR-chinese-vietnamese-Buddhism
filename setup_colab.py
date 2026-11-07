@@ -14,6 +14,7 @@ ROOT = Path(__file__).resolve().parent
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--env-dir", type=Path, default=Path("/content/han-ocr-env"))
+    parser.add_argument("--with-export", action="store_true", help="Cài thêm DagsHub và S3 client.")
     args = parser.parse_args()
     if shutil.which("nvidia-smi") is None:
         parser.error("Chưa có NVIDIA GPU. Chọn Runtime > Change runtime type > GPU.")
@@ -34,10 +35,14 @@ def main():
                     "https://www.paddlepaddle.org.cn/packages/stable/cu126/"], check=True)
     subprocess.run([str(python), "-m", "pip", "install", "-r",
                     str(ROOT / "requirements-colab.txt")], check=True)
+    if args.with_export:
+        subprocess.run([str(python), "-m", "pip", "install", "-r",
+                        str(ROOT / "requirements-export.txt")], check=True)
     subprocess.run([str(python), "-m", "pip", "check"], check=True)
     check = """
 import paddle
 from paddleocr import PaddleOCRVL
+from sentencepiece import sentencepiece_model_pb2
 assert paddle.is_compiled_with_cuda(), 'Paddle đang dùng bản CPU.'
 assert paddle.device.cuda.device_count() > 0, 'Paddle không thấy GPU.'
 paddle.set_device('gpu:0')

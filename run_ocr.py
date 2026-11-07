@@ -27,6 +27,7 @@ def main():
     parser.add_argument("--work-dir", type=Path, default=Path(tempfile.gettempdir()) / "han-ocr-inputs")
     parser.add_argument("--pipeline-version", default="v1.6", choices=("v1.6", "v1.5", "v1"))
     parser.add_argument("--dpi", type=int, default=200)
+    parser.add_argument("--dagshub-repo", help="Tự xuất và upload kết quả sau lượt OCR, dạng owner/repo.")
     args = parser.parse_args()
     if not 72 <= args.dpi <= 600:
         parser.error("DPI phải trong khoảng 72–600.")
@@ -59,7 +60,12 @@ def main():
             worker_args = argparse.Namespace(pdf=str(local_pdf), output=str(output),
                                              pages=args.pages, pipeline_version=args.pipeline_version,
                                              dpi=args.dpi)
-            return zh_ocr_worker.run(worker_args)
+            result = zh_ocr_worker.run(worker_args)
+            if args.dagshub_repo:
+                from export_results import make_export, upload_export
+                bundle = make_export(output, args.pages)
+                upload_export(bundle, args.dagshub_repo)
+            return result
     except (OSError, ValueError) as error:
         parser.error(str(error))
 
