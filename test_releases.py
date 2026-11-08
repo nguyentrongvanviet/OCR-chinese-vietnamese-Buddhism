@@ -40,7 +40,7 @@ class FakeGitHub:
         if self.fail_manifest and file.name.endswith(".manifest.json"):
             raise OSError("Interrupted upload")
         item = {"id": len(self.assets) + 1, "name": file.name, "release_id": release["id"],
-                "browser_download_url": "https://github.com/download/" + file.name}
+                "browser_download_url": "https://github.com/download/untagged/" + file.name}
         self.assets[item["id"]] = (item, file.read_bytes())
         self.uploaded.append(file.name)
         return item
@@ -51,6 +51,9 @@ class FakeGitHub:
     def publish(self, repo, release_id):
         release = self.get_release(repo, release_id)
         release["draft"] = False
+        for item, _ in self.assets.values():
+            if item["release_id"] == release_id:
+                item["browser_download_url"] = item["browser_download_url"].replace("/untagged/", "/" + release["tag_name"] + "/")
         self.published.append(release_id)
         return release
 
@@ -77,6 +80,8 @@ class ReleaseTests(unittest.TestCase):
                                                "body": "old", "draft": False})
         receipt = publish_txt(self.txt, **self.options)
         self.assertEqual(receipt["version"], 8)
+        self.assertNotIn("/untagged/", receipt["txt_url"])
+        self.assertIn("v0008/", receipt["txt_url"])
         self.assertEqual(receipt["txt_filename"], "viet_an-quang-van-sao-zh_v0008_100405_2026-11-08.txt")
         self.assertEqual(self.client.assets[1][1], self.txt.read_bytes())
         self.assertEqual(len(self.client.uploaded), 3)

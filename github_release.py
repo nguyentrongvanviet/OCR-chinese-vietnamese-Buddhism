@@ -228,6 +228,13 @@ def publish_txt(txt, repo, product, version="auto", metadata=None, state_dir=Non
         confirmed = client.get_release(repo, release["id"])
         if confirmed["draft"]:
             raise ValueError("Release vẫn là bản nháp; chạy lại để tiếp tục.")
+        # Draft assets can have temporary /untagged-... URLs. Resolve the
+        # canonical download URLs again after publication, never cache those.
+        published_assets = {asset["name"]: asset for asset in client.list_assets(repo, release["id"])}
+        for item in uploaded:
+            if item["name"] not in published_assets:
+                raise ValueError("Release công khai thiếu asset đã xác minh; chạy lại bước xuất.")
+            item["url"] = published_assets[item["name"]]["browser_download_url"]
         receipt = {"repo": repo, "release_url": confirmed["html_url"], "tag": release["tag_name"],
                    "version": plan["version"], "created_at_vietnam": plan["created_at_vietnam"],
                    "txt_filename": target.name, "txt_url": uploaded[0]["url"], "assets": uploaded,
