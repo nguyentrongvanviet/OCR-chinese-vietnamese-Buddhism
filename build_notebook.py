@@ -15,11 +15,11 @@ def build(repo_url):
         cells.append(cell)
 
     add("markdown", """
-    **GitHub chứa code + PDF gốc · Colab chạy GPU · Drive giữ checkpoint · DagsHub nhận sản phẩm**
+    **GitHub chứa code + PDF gốc · Colab chạy GPU · Drive giữ checkpoint · GitHub Releases nhận TXT**
 
     Chọn Runtime > Change runtime type > GPU rồi chạy từ trên xuống.
-    Không cần tự upload PDF. Mặc định thử trang 3–5; kiểm tra chữ và thứ tự cột trước khi đổi `PAGES` thành `all`.
-    DagsHub hiện là repo công khai: các kết quả được upload sẽ công khai.
+    Không cần tự upload PDF. Mặc định thử trang 3–8; kiểm tra chữ và thứ tự cột trước khi đổi `PAGES` thành `all`.
+    Repo hiện công khai: TXT đính kèm Release sẽ công khai.
     """)
     add("code", f"""
     from pathlib import Path
@@ -67,10 +67,11 @@ def build(repo_url):
 
     DRIVE_DIR = "/content/drive/MyDrive/NLP_midterm_zh" #@param {type:"string"}
     OUTPUT_NAME = "ocr_zh_v02" #@param {type:"string"}
-    PAGES = "3,4,5" #@param {type:"string"}
-    DAGSHUB_REPO = "nguyentrongvanviet/OCR_chinese_to_vietnamese_for_NLP" #@param {type:"string"}
-    UPLOAD_TO_DAGSHUB = True #@param {type:"boolean"}
-    AUTH_METHOD = "oauth" #@param ["oauth", "colab_secrets"]
+    PAGES = "3-8" #@param {type:"string"}
+    GITHUB_REPO = "nguyentrongvanviet/OCR-chinese-vietnamese-Buddhism" #@param {type:"string"}
+    PRODUCT_NAME = "an-quang-van-sao-zh" #@param {type:"string"}
+    RELEASE_VERSION = "auto" #@param {type:"string"}
+    UPLOAD_TO_GITHUB = False #@param {type:"boolean"}
     source = json.loads((REPO_DIR / "assets/source_manifest.json").read_text())
     PDF_PATH = REPO_DIR / source["path"]
     assert PDF_PATH.stat().st_size == source["bytes"]
@@ -80,43 +81,39 @@ def build(repo_url):
     print("Checkpoint:", OUTPUT_DIR)
     """)
     add("code", """
-    run_visible([sys.executable, "-u", str(REPO_DIR / "setup_colab.py"), "--with-export"])
+    run_visible([sys.executable, "-u", str(REPO_DIR / "setup_colab.py")])
     ENV_PY = "/content/han-ocr-env/bin/python"
     """)
     add("markdown", """
-    **Xác thực DagsHub một lần trong runtime**
+    **Xuất TXT lên GitHub Releases**
 
-    Ô sau hiển thị liên kết đăng nhập OAuth nếu chưa xác thực. Mở liên kết và tự xác nhận.
-    Không đưa token vào code, Git, Drive hoặc output notebook. SDK giữ thông tin xác thực trong runtime tạm thời.
-    Nếu dùng lâu dài, chọn `AUTH_METHOD="colab_secrets"`, tự thêm secret `DAGSHUB_USER_TOKEN`
-    trong mục Secrets (biểu tượng chìa khóa) và bật Notebook access. Mỗi người dùng token của mình.
-    Đặt `UPLOAD_TO_DAGSHUB=False` nếu chỉ cần OCR và ZIP trên Drive.
+    Tự thêm secret `GITHUB_TOKEN` trong thanh bên Secrets (biểu tượng chìa khóa), bật Notebook access.
+    Token chỉ cần truy cập repo đích với quyền **Contents: Read and write**. Không paste token vào code/output.
+    Mặc định `UPLOAD_TO_GITHUB=False`: mọi người có thể chạy OCR/lưu Drive mà không cần token.
+    Chỉ bật `UPLOAD_TO_GITHUB=True` khi cần phát hành; điền repo của bạn hoặc repo mà bạn có quyền ghi.
+
+    Tên TXT: `<owner>_<sản-phẩm>_v0001_HHMMSS_YYYY-MM-DD.txt`, giờ Việt Nam.
+    `RELEASE_VERSION="auto"` tự lấy số kế tiếp trên GitHub, có tính các bản nháp đang upload.
+    Chạy lại ô Upload với cùng gói sẽ tiếp tục cùng version; tạo gói xuất mới để phát hành version mới.
     """)
     add("code", """
     import os
-    if UPLOAD_TO_DAGSHUB:
-        os.environ["DAGSHUB_CLIENT_TOKENS_CACHE"] = "/content/han-ocr-auth/tokens.yaml"
-        if AUTH_METHOD == "colab_secrets":
-            from google.colab import userdata
-            try:
-                os.environ["DAGSHUB_USER_TOKEN"] = userdata.get("DAGSHUB_USER_TOKEN")
-            except (userdata.SecretNotFoundError, userdata.NotebookAccessError, userdata.TimeoutException):
-                raise RuntimeError("Thêm DAGSHUB_USER_TOKEN vào Colab Secrets và bật Notebook access, rồi chạy lại ô này.") from None
-            if not os.environ["DAGSHUB_USER_TOKEN"].strip():
-                raise RuntimeError("Secret DAGSHUB_USER_TOKEN đang rỗng.")
-        elif AUTH_METHOD == "oauth":
-            os.environ.pop("DAGSHUB_USER_TOKEN", None)
-        else:
-            raise ValueError("AUTH_METHOD phải là oauth hoặc colab_secrets.")
-        run_visible([ENV_PY, "-u", str(REPO_DIR / "check_dagshub.py"), "--repo", DAGSHUB_REPO])
+    if UPLOAD_TO_GITHUB:
+        from google.colab import userdata
+        try:
+            os.environ["GITHUB_TOKEN"] = userdata.get("GITHUB_TOKEN")
+        except (userdata.SecretNotFoundError, userdata.NotebookAccessError, userdata.TimeoutException):
+            raise RuntimeError("Thêm GITHUB_TOKEN vào Colab Secrets, bật Notebook access rồi chạy lại ô này.") from None
+        run_visible([ENV_PY, "-u", str(REPO_DIR / "github_release.py"),
+                     "--check-auth", "--repo", GITHUB_REPO])
     else:
-        print("Chỉ lưu checkpoint và ZIP trên Drive; không cần xác thực DagsHub.")
+        print("Chỉ lưu checkpoint và ZIP trên Drive.")
     """)
     add("code", """
     command = [ENV_PY, "-u", str(REPO_DIR / "run_ocr.py"),
                "--pdf", str(PDF_PATH), "--output", str(OUTPUT_DIR), "--pages", PAGES]
-    if UPLOAD_TO_DAGSHUB:
-        command.extend(["--dagshub-repo", DAGSHUB_REPO])
+    if UPLOAD_TO_GITHUB:
+        command.extend(["--github-repo", GITHUB_REPO, "--product", PRODUCT_NAME, "--version", RELEASE_VERSION])
     run_visible(command)
     """)
     add("code", """
@@ -137,21 +134,23 @@ def build(repo_url):
     if latest.exists():
         bundle = Path(json.loads(latest.read_text())["path"])
         print("ZIP trên Drive:", bundle / "bundle.zip")
-        receipt = bundle / "upload_receipt.json"
+        receipt = bundle / "github_release" / "receipt.json"
         print(receipt.read_text() if receipt.exists() else "Upload chưa hoàn tất; chạy ô thử lại bên dưới.")
     """)
     add("markdown", """
     **Upload lại khi mạng lỗi — không OCR lại**
 
     Chạy ô dưới nếu upload thất bại. Gói giữ nguyên mã lần xuất, kiểm tra SHA-256 từng file sau khi tải lên,
-    và chỉ ghi `_SUCCESS.json` khi truyền đủ dữ liệu. `_SUCCESS` xác nhận truyền file, không xác nhận OCR chính xác.
-    `han.txt` chứa toàn bộ trang thuộc phạm vi chạy; `pages.jsonl` giữ số trang và JSON OCR gốc.
+    và chỉ công khai Release khi TXT, manifest và checksum đã được tải đọc lại để kiểm tra SHA-256.
+    `han.txt` chứa toàn bộ trang thuộc phạm vi chạy; `pages.jsonl` giữ số trang và JSON OCR gốc trên Drive.
+    File trên Release có tên theo tài khoản, sản phẩm, version, giờ và ngày; không ghi đè bản đã phát hành.
     """)
     add("code", """
-    if UPLOAD_TO_DAGSHUB:
+    if UPLOAD_TO_GITHUB:
         latest = json.loads((OUTPUT_DIR / "latest_export.json").read_text())
         run_visible([ENV_PY, "-u", str(REPO_DIR / "export_results.py"),
-                     "--bundle", latest["path"], "--dagshub-repo", DAGSHUB_REPO])
+                     "--bundle", latest["path"], "--github-repo", GITHUB_REPO,
+                     "--product", PRODUCT_NAME, "--version", RELEASE_VERSION])
     else:
         print("Upload đang tắt. ZIP đã được lưu trên Drive.")
     """)
@@ -159,10 +158,10 @@ def build(repo_url):
     **Chạy toàn bộ**
 
     Đổi `PAGES` thành `all`, chạy lại ô cấu hình và ô OCR. Các checkpoint hợp lệ được bỏ qua.
-    `han_ocr_full.txt` trên Drive chỉ xuất hiện khi đủ mọi trang; gói DagsHub có `complete_book=true` khi đủ toàn bộ.
+    `han_ocr_full.txt` trên Drive chỉ xuất hiện khi đủ mọi trang; manifest trên Release có `complete_book=true` khi đủ toàn bộ.
     Dữ liệu vẫn là OCR thô, chưa khử lem theo cặp, chưa hiệu đính hoặc gióng hàng.
-    Mỗi gói xuất có thư mục riêng: `exports/<mã PDF>/<mã lần xuất>/`.
-    Thành viên trong nhóm dùng cùng gói ZIP để có cùng dữ liệu. Tránh chạy đồng thời vào cùng thư mục Drive.
+    Mỗi gói xuất có thư mục riêng trên Drive: `exports/<mã lần xuất>/`.
+    Thành viên trong nhóm tải TXT từ cùng tag GitHub Release để có cùng dữ liệu. Tránh chạy đồng thời vào cùng thư mục Drive.
     Không cập nhật code giữa một lượt OCR. Để tái lập, dùng commit cụ thể ở `REF`;
     đổi `OUTPUT_NAME` khi thay model/worker làm thay đổi cấu hình.
     """)

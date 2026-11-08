@@ -1,4 +1,4 @@
-"""Package validated OCR checkpoints and transfer the package to DagsHub Storage.
+"""Package validated OCR checkpoints for local use or GitHub Releases.
 
 Never includes the source PDF, credentials or arbitrary files from the output folder.
 """
@@ -8,8 +8,6 @@ from datetime import datetime, timezone
 import hashlib
 import json
 from pathlib import Path, PurePosixPath
-import re
-import time
 import uuid
 import zipfile
 
@@ -108,92 +106,24 @@ def validate_bundle(bundle):
     return checksums
 
 
-def head_or_none(client, bucket, key):
-    try:
-        return client.head_object(Bucket=bucket, Key=key)
-    except Exception as error:
-        code = str(getattr(error, "response", {}).get("Error", {}).get("Code", ""))
-        if code in ("404", "NoSuchKey", "NotFound"):
-            return None
-        raise
-
-
-def upload_export(bundle, repo, client=None, attempts=3):
-    if not re.fullmatch(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+", repo):
-        raise ValueError("DagsHub repo phải ở dạng owner/repo.")
-    bundle = Path(bundle).resolve()
-    checksums = validate_bundle(bundle)
-    manifest = json.loads((bundle / "manifest.json").read_text(encoding="utf-8"))
-    bucket = repo.split("/", 1)[1]
-    prefix = f"exports/{manifest['source_pdf_sha256'][:12]}/{manifest['export_id']}"
-    marker_key = prefix + "/_SUCCESS.json"
-    receipt = {"repo": repo, "repo_url": f"https://dagshub.com/{repo}", "bucket": bucket,
-               "prefix": prefix, "manifest_sha256": checksums["manifest.json"],
-               "bundle_sha256": checksums["bundle.zip"], "complete_book": manifest["complete_book"],
-               "complete_scope": manifest["complete_scope"], "quality_reviewed": False}
-    try:
-        if client is None:
-            from dagshub import get_repo_bucket_client
-            client = get_repo_bucket_client(repo)
-        if head_or_none(client, bucket, marker_key) is not None:
-            previous = json.loads(client.get_object(Bucket=bucket, Key=marker_key)["Body"].read())
-            if previous != receipt:
-                raise ValueError("Đường dẫn remote đã có một gói xuất khác; không ghi đè.")
-            write_json(bundle / "upload_receipt.json", receipt)
-            return receipt
-        for name, digest in checksums.items():
-            path, key = bundle / name, prefix + "/" + name
-            for attempt in range(attempts):
-                try:
-                    existing = head_or_none(client, bucket, key)
-                    if attempt or not (existing and existing.get("Metadata", {}).get("sha256") == digest
-                            and existing.get("ContentLength") == path.stat().st_size):
-                        client.upload_file(Filename=str(path), Bucket=bucket, Key=key,
-                                           ExtraArgs={"Metadata": {"sha256": digest}})
-                    remote_hash = hashlib.sha256()
-                    body = client.get_object(Bucket=bucket, Key=key)["Body"]
-                    try:
-                        for chunk in iter(lambda: body.read(1024 * 1024), b""):
-                            remote_hash.update(chunk)
-                    finally:
-                        body.close()
-                    if remote_hash.hexdigest() != digest:
-                        raise ValueError(f"Checksum remote sai: {name}")
-                    print("DagsHub verified:", name, flush=True)
-                    break
-                except Exception:
-                    if attempt + 1 == attempts:
-                        raise
-                    time.sleep(2 ** attempt)
-        marker = json.dumps(receipt, ensure_ascii=False, sort_keys=True).encode("utf-8")
-        client.put_object(Bucket=bucket, Key=marker_key, Body=marker, ContentType="application/json")
-        confirmed = json.loads(client.get_object(Bucket=bucket, Key=marker_key)["Body"].read())
-        if confirmed != receipt:
-            raise ValueError("Chưa xác minh được dấu hoàn tất trên DagsHub.")
-        write_json(bundle / "upload_receipt.json", receipt)
-        print(f"Đã chuyển và kiểm tra gói dữ liệu: {receipt['repo_url']} → {prefix}", flush=True)
-        return receipt
-    except Exception as error:
-        # Keep the artifact intact so upload can be retried without another OCR run.
-        write_json(bundle / "upload_pending.json", {"repo": repo, "prefix": prefix,
-                                                   "error_type": type(error).__name__})
-        raise
-
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     source = parser.add_mutually_exclusive_group(required=True)
-    source.add_argument("--output", type=Path, help="Thư mục checkpoint OCR để tạo gói xuất.")
-    source.add_argument("--bundle", type=Path, help="Gói đã tạo; dùng để thử upload lại, không OCR lại.")
+    source.add_argument("--output", type=Path, help="Thư mục checkpoint để tạo gói xuất.")
+    source.add_argument("--bundle", type=Path, help="Gói đã tạo; thử upload lại mà không OCR lại.")
     parser.add_argument("--pages", default="all")
     parser.add_argument("--include-images", action="store_true")
-    parser.add_argument("--dagshub-repo", help="owner/repo; bỏ trống nếu chỉ muốn đóng gói cục bộ.")
+    parser.add_argument("--github-repo", help="owner/repo; bỏ trống để chỉ đóng gói trên Drive.")
+    parser.add_argument("--product", default="an-quang-van-sao-zh")
+    parser.add_argument("--version", default="auto", help="auto hoặc số nguyên dương như 1, 2, 3.")
     args = parser.parse_args()
     bundle = args.bundle or make_export(args.output, args.pages, args.include_images)
     validate_bundle(bundle)
     print("Gói kết quả:", bundle, flush=True)
-    if args.dagshub_repo:
-        upload_export(bundle, args.dagshub_repo)
+    if args.github_repo:
+        from github_release import publish_bundle
+        publish_bundle(bundle, args.github_repo, args.product, args.version)
 
 
 if __name__ == "__main__":

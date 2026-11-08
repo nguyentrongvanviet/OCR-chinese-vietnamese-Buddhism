@@ -27,7 +27,9 @@ def main():
     parser.add_argument("--work-dir", type=Path, default=Path(tempfile.gettempdir()) / "han-ocr-inputs")
     parser.add_argument("--pipeline-version", default="v1.6", choices=("v1.6", "v1.5", "v1"))
     parser.add_argument("--dpi", type=int, default=200)
-    parser.add_argument("--dagshub-repo", help="Tự xuất và upload kết quả sau lượt OCR, dạng owner/repo.")
+    parser.add_argument("--github-repo", help="Xuất TXT lên GitHub Releases sau OCR, dạng owner/repo.")
+    parser.add_argument("--product", default="an-quang-van-sao-zh")
+    parser.add_argument("--version", default="auto")
     args = parser.parse_args()
     if not 72 <= args.dpi <= 600:
         parser.error("DPI phải trong khoảng 72–600.")
@@ -61,11 +63,12 @@ def main():
                                              pages=args.pages, pipeline_version=args.pipeline_version,
                                              dpi=args.dpi)
             result = zh_ocr_worker.run(worker_args)
-            from export_results import make_export, upload_export
+            from export_results import make_export
             bundle = make_export(output, args.pages)
             print("ZIP kết quả:", bundle / "bundle.zip", flush=True)
-            if args.dagshub_repo:
-                upload_export(bundle, args.dagshub_repo)
+            if args.github_repo:
+                from github_release import publish_bundle
+                publish_bundle(bundle, args.github_repo, args.product, args.version)
             return result
     except (OSError, ValueError) as error:
         parser.error(str(error))

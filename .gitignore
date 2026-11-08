@@ -30,3 +30,5 @@ models/
 
 # The shared, immutable OCR input explicitly included in this repository.
 !assets/pdf/an_quang_van_sao_zh_4.pdf
+
+.github_releases/

@@ -1,4 +1,4 @@
-"""Exercise the CLI-to-artifact path without a GPU or DagsHub credentials."""
+"""Exercise the CLI-to-artifact path without a GPU or GitHub credentials."""
 import ast
 import json
 from pathlib import Path
@@ -38,7 +38,7 @@ class LauncherTests(unittest.TestCase):
             argv = ["run_ocr.py", "--pdf", str(pdf), "--output", str(output),
                     "--pages", "all", "--work-dir", str(root / "runtime")]
             with patch("sys.argv", argv), patch.object(worker, "run", side_effect=lambda args: actual_run(args, Pipeline)), \
-                    patch("export_results.upload_export") as upload:
+                    patch("github_release.publish_bundle") as upload:
                 self.assertEqual(run_ocr.main(), 0)
                 upload.assert_not_called()
             self.assertIn("印光", (output / "han_ocr_full.txt").read_text(encoding="utf-8"))
