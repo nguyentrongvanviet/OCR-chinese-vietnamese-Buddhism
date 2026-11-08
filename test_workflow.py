@@ -39,7 +39,7 @@ class WorkflowTests(unittest.TestCase):
                 def __init__(self, **kwargs):
                     pass
 
-                def predict(self, input):
+                def predict(self, input, **kwargs):
                     page = int(Path(input).parent.name.split("_")[1])
                     calls.append(page)
                     if page in fail:
@@ -49,6 +49,9 @@ class WorkflowTests(unittest.TestCase):
 
             self.assertEqual(worker.run(args, FakePipeline), 1)
             output = Path(args.output)
+            config = json.loads((output / "config.json").read_text())
+            self.assertFalse(config["use_queues"])
+            self.assertIn(config["allocator_strategy"], ("naive_best_fit", "auto_growth"))
             self.assertFalse((output / "han_ocr_full.txt").exists())
             self.assertEqual(calls, [1, 2, 3])
             self.assertEqual(worker.run(args, FakePipeline), 0)

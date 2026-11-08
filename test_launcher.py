@@ -31,7 +31,7 @@ class LauncherTests(unittest.TestCase):
             class Pipeline:
                 def __init__(self, **kwargs):
                     pass
-                def predict(self, input):
+                def predict(self, input, **kwargs):
                     yield Result()
 
             actual_run = worker.run

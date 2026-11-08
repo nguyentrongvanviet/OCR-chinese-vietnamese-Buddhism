@@ -22,7 +22,7 @@ def main():
     parser.add_argument("--drive-dir", type=Path, help="Ví dụ /content/drive/MyDrive/NLP_midterm_zh")
     parser.add_argument("--pdf", type=Path, help="Chỉ rõ PDF nếu không dùng chế độ tìm trong Drive.")
     parser.add_argument("--output", type=Path, help="Thư mục kết quả; có thể là Drive hoặc Kaggle working.")
-    parser.add_argument("--output-name", default="ocr_zh_v01")
+    parser.add_argument("--output-name", default="ocr_zh_v02")
     parser.add_argument("--pages", default="3,4,5", help="3,4,5; 1-25; hoặc all")
     parser.add_argument("--work-dir", type=Path, default=Path(tempfile.gettempdir()) / "han-ocr-inputs")
     parser.add_argument("--pipeline-version", default="v1.6", choices=("v1.6", "v1.5", "v1"))

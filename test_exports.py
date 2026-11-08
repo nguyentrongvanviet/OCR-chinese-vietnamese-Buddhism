@@ -65,7 +65,7 @@ class ExportTests(unittest.TestCase):
             def __init__(self, **kwargs):
                 pass
 
-            def predict(self, input):
+            def predict(self, input, **kwargs):
                 yield Result()
 
         args = argparse.Namespace(pdf=str(pdf), output=str(self.output), pages="1",

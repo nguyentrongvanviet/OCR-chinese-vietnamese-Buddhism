@@ -29,9 +29,18 @@ def build(repo_url):
     def run_visible(command):
         with subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                               text=True, bufsize=1) as process:
-            for line in process.stdout:
-                print(line, end="", flush=True)
-            code = process.wait()
+            try:
+                for line in process.stdout:
+                    print(line, end="", flush=True)
+                code = process.wait()
+            except BaseException:
+                process.terminate()
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait()
+                raise
         if code:
             raise RuntimeError(f"Lệnh kết thúc với mã {{code}}; xem log phía trên.")
 
@@ -57,7 +66,7 @@ def build(repo_url):
     drive.mount("/content/drive")
 
     DRIVE_DIR = "/content/drive/MyDrive/NLP_midterm_zh" #@param {type:"string"}
-    OUTPUT_NAME = "ocr_zh_v01" #@param {type:"string"}
+    OUTPUT_NAME = "ocr_zh_v02" #@param {type:"string"}
     PAGES = "3,4,5" #@param {type:"string"}
     DAGSHUB_REPO = "nguyentrongvanviet/OCR_chinese_to_vietnamese_for_NLP" #@param {type:"string"}
     UPLOAD_TO_DAGSHUB = True #@param {type:"boolean"}

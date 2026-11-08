@@ -24,7 +24,7 @@ Colab chạy GPU; Drive giữ checkpoint qua những lần ngắt runtime; DagsH
 Mỗi lượt chạy tạo thư mục trên Drive:
 
 ```
-NLP_midterm_zh/ocr_zh_v01/
+NLP_midterm_zh/ocr_zh_v02/
   config.json                 # SHA nguồn, worker và cấu hình
   environment-lock.txt        # phiên bản thực tế đã cài
   runs/                       # lịch sử các lần chạy và commit
@@ -61,8 +61,8 @@ Cả nhóm chọn cùng một `export_id`, tải `bundle.zip` trong tab **Data /
 - Không upload được vẫn lấy ZIP trực tiếp trên Drive. Để chỉ đóng gói mà không cần DagsHub, chạy lệnh bên dưới.
 
 ```bash
-python export_results.py --output /path/to/ocr_zh_v01 --pages all
-python export_results.py --bundle /path/to/ocr_zh_v01/exports/EXPORT_ID \
+python export_results.py --output /path/to/ocr_zh_v02 --pages all
+python export_results.py --bundle /path/to/ocr_zh_v02/exports/EXPORT_ID \
   --dagshub-repo nguyentrongvanviet/OCR_chinese_to_vietnamese_for_NLP
 ```
 
@@ -93,3 +93,7 @@ Các test kiểm tra phục hồi sau ngắt, phát hiện checkpoint hỏng, kh
 MIT trong repo áp dụng cho code. PDF giữ thông tin nguồn gốc riêng trong manifest; repo không tuyên bố cấp lại giấy phép cho nội dung sách.
 
 Xác thực dùng cơ chế chính thức của [DagsHub SDK](https://dagshub.com/docs/client/reference/auth); bucket dùng [DagsHub Storage](https://dagshub.com/docs/feature_guide/dagshub_storage/).
+
+## Khắc phục lượt suy luận bị kẹt trên GPU
+
+Worker dùng `use_queues=False` và mặc định `FLAGS_allocator_strategy=naive_best_fit` trước khi import Paddle, theo hướng xử lý của [PaddleOCR #17693](https://github.com/PaddlePaddle/PaddleOCR/issues/17693). Đây là cấu hình thực thi, không phải bước sửa chữ. Cấu hình này được ghi trong `config.json`. Dùng thư mục mới `ocr_zh_v02` khi chuyển từ worker cũ, tránh trộn checkpoint. Nếu vẫn kẹt, ngắt lượt chạy; notebook sẽ dừng cả tiến trình OCR con.

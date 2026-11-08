@@ -10,6 +10,7 @@ import hashlib
 import importlib.metadata
 import io
 import json
+import os
 from pathlib import Path
 import subprocess
 import sys
@@ -18,7 +19,7 @@ import traceback
 import uuid
 
 
-FORMAT_VERSION = 2
+FORMAT_VERSION = 3
 
 
 def source_revision():
@@ -202,6 +203,9 @@ def aggregate(output, count, run_id):
 
 
 def run(args, pipeline_factory=None):
+    # Avoid a known cross-stream allocator hang in PaddleOCR-VL on some GPUs.
+    # Configure before Paddle is imported, and serialize the per-page inference.
+    os.environ.setdefault("FLAGS_allocator_strategy", "naive_best_fit")
     import pymupdf
 
     pdf = Path(args.pdf).expanduser().resolve()
@@ -223,6 +227,8 @@ def run(args, pipeline_factory=None):
             "paddlepaddle_gpu": package_version("paddlepaddle-gpu"),
             "pymupdf": package_version("PyMuPDF"),
             "pillow": package_version("Pillow"),
+            "use_queues": False,
+            "allocator_strategy": os.environ["FLAGS_allocator_strategy"],
             "reading_order": "pipeline_parsing_res_list",
             "preprocessing": "original; orientation and unwarping disabled",
             "text_policy": "all nonempty block contents; no character conversion",
@@ -267,7 +273,7 @@ def run(args, pipeline_factory=None):
                     try:
                         source = directory / "source.png"
                         image_mode = save_page_image(document, number, source, args.dpi)
-                        results = iter(pipeline.predict(input=str(source)))
+                        results = iter(pipeline.predict(input=str(source), use_queues=False))
                         result = next(results, None)
                         if result is None or next(results, None) is not None:
                             raise ValueError("Mỗi ảnh trang phải có đúng một kết quả OCR.")
